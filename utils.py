@@ -34,36 +34,19 @@ def mu_law_decode(output):
     magnitude = (1 / mu) * ((1 + mu)**abs(signal) - 1)
     return np.sign(signal) * magnitude
 
+def get_wav(fpath):
+    wav, sr = librosa.load(fpath, sr=hp.sr)
+    wav, _ = librosa.effects.trim(wav)
+    wav /= np.abs(wav).max()
+    qt = mu_law_encode(wav)
 
+    # Padding
+    maxlen = hp.duration * hp.sr
+    wav = np.pad(wav, ([0, maxlen]), mode="constant")[:maxlen]
+    qt = np.pad(qt, ([0, maxlen]), mode="constant")[:maxlen]
 
-y, sr = librosa.load(fpath, sr=hp.sr)
-qt = mu_law(y)
+    ####
+    wav = np.expand_dims(wav, -1) # (T, 1)
+    qt = np.expand_dims(qt, -1) # (T, 1)
 
-# length
-if len(raw) <= self.length:
-            # padding
-            pad = self.length-len(raw)
-            raw = np.concatenate(
-                (raw, np.zeros(pad, dtype=np.float32)))
-            qt = np.concatenate(
-                (qt, self.mu // 2 * np.ones(pad, dtype=np.int32)))
-        else:
-            # triming
-            if self.random:
-                start = random.randint(0, len(raw) - self.length-1)
-                raw = raw[start:start + self.length]
-                qt = qt[start:start + self.length]
-            else:
-                raw = raw[:self.length]
-qt = qt[:self.length]
-
-
-# expand dimension
-        raw = raw.reshape((1, -1, 1))
-        y = np.identity(self.mu)[qt].astype(np.float32) #mu=256
-        y = np.expand_dims(y.T, 2)
-        t = np.expand_dims(qt.astype(np.int32), 1)
-        if self.speaker_dic is None:
-            return raw[:, :-1, :], y[:, :-1, :], t[1:, :]
-        else:
-return raw[:, :-1, :], y[:, :-1, :], np.int32(speaker), t[1:, :]
+    return wav[:-1, :], qt[1:, :] # why?

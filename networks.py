@@ -1,13 +1,3 @@
-We first consider the VCTK dataset, which has speech recordings of 109 different speakers [
-41
-].
-We train a VQ-VAE where the encoder has 6 strided convolutions with stride 2 and window-size 4.
-This yields a latent space 64x smaller than the original waveform. The latents consist of one feature
-map and the discrete space is 512-dimensional. The decoder is conditioned on both the latents and a
-one-hot embedding for the speaker
-    self, in_channels, out_channels, ksize = None, stride = 1,
-    pad = 0, nobias = False, initialW = None, initial_bias = None)
-    d=256
 # -*- coding: utf-8 -*-
 # /usr/bin/python2
 '''
@@ -22,17 +12,41 @@ from modules import *
 import tensorflow as tf
 
 
-def encoder(inputs):
+def encoder(x):
+    '''
+    :param x: waveform. [B, T, 1]
+    :return: z_e: encoded variable. [B, T', D]
+    '''
     for i in range(hp.encoder_layers):
-        inputs = conv1d(inputs,
-                       filters=hp.d,
-                       size=hp.winsize,
-                       strides=hp.stride,
-                       padding="valid",
-                       activation_fn=tf.nn.relu if i < hp.encoder_layers-1 else None)
-    z = inputs
-    return z
+        x = conv1d(x,
+                    filters=hp.d,
+                    size=hp.winsize,
+                    strides=hp.stride,
+                    padding="valid",
+                    bn=True,
+                    activation_fn=tf.nn.relu if i < hp.encoder_layers-1 else None)
+    z_e = x
+    return z_e
 
+def vq(z_e):
+    '''
+
+    :param z_e: encoded variable. [B, T', D].
+    :return: z_q: nearest embeddings. [B, T', D].
+    '''
+    lookup_table = tf.get_variable('lookup_table',
+                                   dtype=tf.float32,
+                                   shape=[hp.K, hp.D],
+                                   initializer=tf.truncated_normal_initializer(mean=0.0, stddev=0.1))
+    z = tf.expand_dims(z_e, -2) # (B, T', 1, D)
+    lookup_table = tf.reshape(lookup_table, [1, 1, hp.K, hp.D]) # (1, 1, K, D)
+    dist = tf.norm(z - lookup_table, axis=-1) # Broadcasting -> (B, T', K)
+    k = tf.argmin(dist, axis=-1) # (B, T')
+    z_q = tf.gather(lookup_table, k) # (B, T', D)
+
+    return z_q
+
+def decoder()
 
 
 num_blocks = 3     # dilated blocks
