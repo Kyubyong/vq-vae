@@ -77,7 +77,7 @@ def decoder(decoder_inputs, speaker_emb, z_q):
 
         # Postnet
         skip = tf.nn.relu(skip)
-        skip = conv1d(skip, activation_fn=tf.nn.relu, scope="one_by_one_1") # (B, T, H)
-        y = conv1d(skip, filters=hp.Q, scope="one_by_one_2") # (B, T, Q) wave logits.
+        skip = conv1d(skip, padding="causal", activation_fn=tf.nn.relu, bn=True, scope="one_by_one_1") # (B, T, H)
+        y = conv1d(skip, filters=hp.Q, padding="causal", scope="one_by_one_2") # (B, T, Q) wave logits.
 
     return y
