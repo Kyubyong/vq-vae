@@ -52,15 +52,13 @@ def get_wav(fpath, maxlen=hp.T):
     '''
     wav, sr = librosa.load(fpath, sr=hp.sr)
     wav, _ = librosa.effects.trim(wav)
-    wav /= np.abs(wav).max()
-    qt = mu_law_encode(wav)
+    wav_ = wav / np.abs(wav).max()
+    qt = mu_law_encode(wav_)
 
     # Padding
-    wav = np.pad(wav, ([0, maxlen]), mode="constant")[:maxlen]
     qt = np.pad(qt, ([0, maxlen]), mode="constant")[:maxlen]
 
-    # Dimeniosn expansion
-    wav = np.expand_dims(wav, -1) # (T, 1)
+    # Dimension expansion
     qt = np.expand_dims(qt, -1) # (T, 1)
 
     return wav.astype(np.float32), qt.astype(np.int32)

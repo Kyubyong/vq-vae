@@ -26,13 +26,13 @@ class Graph:
         # Graph
         # Data Feeding
         ## x: Quantized wav. (B, T, 1) int32
-        ## wavs: Raw wav. (B, length, 1) float32
+        ## wavs: Raw wav. (B, length) float32
         ## speakers: Speaker ids. (B,). [0, 108]. int32.
         if mode=="train":
             self.x, self.wavs, self.speakers, self.num_batch = get_batch()
         else:  # eval
-            self.x = tf.placeholder(tf.int32, shape=(2, 3*hp.T))
-            self.wavs = tf.placeholder(tf.float32, shape=(2, 3*hp.T))
+            self.x = tf.placeholder(tf.int32, shape=(2, hp.T))
+            self.wavs = tf.placeholder(tf.float32, shape=(2, None))
             self.speakers = tf.placeholder(tf.int32, shape=(2,))
 
         # inputs:
@@ -51,60 +51,59 @@ class Graph:
         # decoder: y -> reconstructed logits.
         self.y = decoder(self.decoder_inputs, self.speakers, self.z_q) # (B, T, Q)
         self.y_hat = tf.argmax(self.y, -1) # (B, T)
-        tf.gradients
+
         # monitor
         self.sample0 = tf.py_func(mu_law_decode, [self.y_hat[0]], tf.float32)
         self.sample1 = tf.py_func(mu_law_decode, [self.y_hat[1]], tf.float32)
 
         # speech samples
-        tf.summary.audio('{}/original1'.format(mode), self.wavs[0], hp.sr, 1)
-        tf.summary.audio('{}/original2'.format(mode), self.wavs[1], hp.sr, 1)
+        tf.summary.audio('{}/original1'.format(mode), self.wavs[:1], hp.sr, 1)
+        tf.summary.audio('{}/original2'.format(mode), self.wavs[1:], hp.sr, 1)
         tf.summary.audio('{}/sample0'.format(mode), tf.expand_dims(self.sample0, 0), hp.sr, 1)
         tf.summary.audio('{}/sample1'.format(mode), tf.expand_dims(self.sample1, 0), hp.sr, 1)
 
         if training:
             self.global_step = tf.Variable(0, name='global_step', trainable=False)
 
-            self.rec_loss = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(logits=self.y, labels=tf.squeeze(self.x)))
+            self.dec_loss = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(logits=self.y, labels=tf.squeeze(self.x)))
             self.vq_loss = tf.reduce_mean(tf.squared_difference(tf.stop_gradient(self.z_e), self.z_q))
             self.enc_loss = hp.beta * tf.reduce_mean(tf.squared_difference(self.z_e, tf.stop_gradient(self.z_q)))
 
             # decoder grads
             decoder_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, "decoder")
-            decoder_grads = tf.gradients(self.rec_loss, decoder_vars)
+            decoder_grads = tf.gradients(self.dec_loss, decoder_vars)
+            decoder_grads_vars = list(zip(decoder_grads, decoder_vars))
 
             # embedding variables grads
             embed_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, "vq")
-            embed_grads = tf.gradients(self.rec_loss + self.vq_loss, embed_vars)
+            embed_grads = tf.gradients(self.dec_loss + self.vq_loss, embed_vars)
+            embed_grads_vars = list(zip(embed_grads, embed_vars))
 
             # encoder grads
             encoder_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, "encoder")
-            transferred_grads = tf.gradients(self.rec_loss, self.z_q)
-            encoder_grads = tf.gradients(self.enc_loss, encoder_vars, transferred_grads)
+            transferred_grads = tf.gradients(self.dec_loss, self.z_q)
+            encoder_grads = [tf.gradients(self.z_e, var, transferred_grads)[0] + tf.gradients(self.enc_loss, var)[0]
+                                 for var in encoder_vars]
+            encoder_grads_vars = list(zip(encoder_grads, encoder_vars))
 
             # total grads
-            self.grads = decoder_grads + embed_grads + encoder_grads
+            self.grads_vars = decoder_grads_vars + embed_grads_vars + encoder_grads_vars
 
             # Training Scheme
             self.optimizer = tf.train.AdamOptimizer(learning_rate=hp.lr)
 
             # Summary
-            tf.summary.scalar('train/rec_loss', self.rec_loss)
+            tf.summary.scalar('train/dec_loss', self.dec_loss)
             tf.summary.scalar('train/vq_loss', self.vq_loss)
             tf.summary.scalar('train/enc_loss', self.enc_loss)
-            # tf.summary.scalar('train/LOSS', self.loss)
 
             # tf.summary.scalar("lr", self.lr)
 
-            ## gradient clipping
-            # self.gvs = self.optimizer.compute_gradients(self.loss)
-            # self.clipped = []
-            # for grad, var in self.gvs:
-            #     grad = tf.clip_by_value(grad, -1., 1.)
-            #     self.clipped.append((grad, var))
+            # gradient clipping
+            self.clipped = [(tf.clip_by_value(grad, -1., 1.), var) for grad, var in self.grads_vars]
 
             with tf.control_dependencies(tf.get_collection(tf.GraphKeys.UPDATE_OPS)):
-                self.train_op = self.optimizer.apply_gradients(self.grads, global_step=self.global_step)
+                self.train_op = self.optimizer.apply_gradients(self.clipped, global_step=self.global_step)
 
         # Summary
         self.merged = tf.summary.merge_all()
@@ -117,7 +116,7 @@ def eval():
     # Parse
     wavs, x = [], []
     for f in files:
-        wav, qt = get_wav(f, 3*hp.T)
+        wav, qt = get_wav(f, hp.T)
         wavs.append(wav)
         x.append(qt)
 
@@ -150,11 +149,11 @@ if __name__ == '__main__':
                 gs, _ = sess.run([g.global_step, g.train_op])
 
                 # Write checkpoint files at every 1k steps
-                if gs % 10 == 0:
+                if gs % 1000 == 0:
                     sv.saver.save(sess, hp.logdir + '/model_gs_{}'.format(str(gs // 1000).zfill(3) + "k"))
 
                     # evaluation
-                    y = sess.run(g.y)
+
 
 
                 # break

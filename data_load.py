@@ -60,15 +60,17 @@ def get_batch():
         f, speaker = tf.train.slice_input_producer([files, speakers], shuffle=True)
 
         # Parse
-        wav, qt = tf.py_func(get_wav, [f], [tf.float32, tf.int32])  # (T, 1)
+        wav, qt = tf.py_func(get_wav, [f], [tf.float32, tf.int32])  # (T,), (T, 1)
 
         # Add shape information
-        wav.set_shape((hp.T, 1))
+        wav.set_shape((None,))
         qt.set_shape((hp.T, 1))
 
         # Batching
         qts, wavs, speakers = tf.train.batch(tensors=[qt, wav, speaker],
                                              batch_size=hp.batch_size,
-                                             num_threads=32)
+                                             shapes=([hp.T, 1], [None,], []),
+                                             num_threads=32,
+                                             dynamic_pad=True)
 
     return qts, wavs, speakers, num_batch
