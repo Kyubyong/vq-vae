@@ -149,8 +149,8 @@ if __name__ == '__main__':
                 gs, _ = sess.run([g.global_step, g.train_op])
 
                 # Write checkpoint files at every 1k steps
-                if gs % 1000 == 0:
-                    sv.saver.save(sess, hp.logdir + '/model_gs_{}'.format(str(gs // 1000).zfill(3) + "k"))
+                if gs % 100 == 0:
+                    sv.saver.save(sess, hp.logdir + '/model_gs_{}'.format(str(gs).zfill(5)))
 
                     # evaluation
 

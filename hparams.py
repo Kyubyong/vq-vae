@@ -32,13 +32,12 @@ class Hyperparams:
     ## decoder (wavenet)
     num_blocks = 3 #10
     dilations = (1, 2, 4, 8, 16, 32, 64, 128, 256)
-    # dilations = (1, 2, 4)
     size = 3 # filter width
     num_units = 256
 
     # training scheme
-    lr = 0.0001 # Initial learning rate.
-    logdir = "logdir/03"
+    lr = 0.0001 # learning rate.
+    logdir = "logdir/07"
     sampledir = 'samples'
     batch_size = 4 # B
     beta = 0.25

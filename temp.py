@@ -1,19 +1,35 @@
-import tensorflow as tf
+# import tensorflow as tf
 from modules import *
-from hparams import Hyperparams as hp
-def encoder(inputs):
-    for i in range(hp.encoder_layers):
-        # inputs = tf.pad(inputs, [[0, 0], [1, 1], [0, 0]])
-        inputs = conv1d(inputs,
-                       filters=hp.D,
-                       size=hp.winsize,
-                       strides=hp.stride,
-                       padding="causal",
-                       activation_fn=tf.nn.relu if i < hp.encoder_layers-1 else None,
-                       scope="conv1d_{}".format(i))
-        print(i, inputs)
-    z = inputs
-    return z
+import numpy as np
+import glob
+import os
+from data_load import speaker2id
+files = glob.glob('vctk/*.npz')
+for f in files:
+    fname = os.path.basename(f)
+    f_ = np.load(f)
+    wav, qt = f_["wav"], f_["qt"]
+    np.save("vctk/wavs/{}".format(fname.replace("npz", "npy")), wav)
+    np.save("vctk/qts/{}".format(fname.replace("npz", "npy")), qt)
+    speaker_id = speaker2id(os.path.basename(wav)[:4])
+    _parse
+
+
+
+# from hparams import Hyperparams as hp
+# def encoder(inputs):
+#     for i in range(hp.encoder_layers):
+#         # inputs = tf.pad(inputs, [[0, 0], [1, 1], [0, 0]])
+#         inputs = conv1d(inputs,
+#                        filters=hp.D,
+#                        size=hp.winsize,
+#                        strides=hp.stride,
+#                        padding="causal",
+#                        activation_fn=tf.nn.relu if i < hp.encoder_layers-1 else None,
+#                        scope="conv1d_{}".format(i))
+#         print(i, inputs)
+#     z = inputs
+#     return z
 # # tf.norm
 inputs = tf.ones((1, 16000, 1))
 z = encoder(inputs)
