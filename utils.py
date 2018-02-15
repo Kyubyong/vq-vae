@@ -62,8 +62,3 @@ def get_wav(fpath, maxlen=hp.T):
     qt = np.expand_dims(qt, -1) # (T, 1)
 
     return wav.astype(np.float32), qt.astype(np.int32)
-
-# fpath = "/Users/ryan/Dropbox/Public/nick/Tom/Tom_01-001.wav"
-#
-# a, b = get_wav(fpath)
-# print(a, b, np.max(b), np.min(b))

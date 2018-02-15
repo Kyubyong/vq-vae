@@ -8,20 +8,14 @@ https://www.github.com/kyubyong/vq-vae
 from __future__ import print_function
 
 from hparams import Hyperparams as hp
-import tensorflow as tf
 from utils import get_wav
 import os
 import glob
-from data_load import load_data
 import numpy as np
 
-# Load data
-files, speakers = load_data() # list
-
-for f, s in zip(files, speakers):
+for f in glob.glob(hp.data):
     w, q = get_wav(f)
-    fname = "vctk/" + os.path.basename(f).replace('wav', 'npz')
-    np.savez(fname, wav=w, qt=q, speaker=s)
+    fname = os.path.basename(f).replace('wav', 'npy')
+    np.save("vctk/wavs/{}".format(fname), w)
+    np.save("vctk/qts/{}".format(fname), q)
 
-    # print(w.shape, q.shape)
-    # print(f, s)
