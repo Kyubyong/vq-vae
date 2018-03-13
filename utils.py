@@ -32,14 +32,14 @@ def mu_law_decode(output):
     Mostly adapted from
     https://github.com/ibab/tensorflow-wavenet/blob/master/wavenet/ops.py#L64-L75
     '''
-    mu = hp.Q - 1
+    mu = hp.Q - 1.
     # Map values back to [-1, 1].
     signal = 2 * (output.astype(np.float32) / mu) - 1
     # Perform inverse of mu-law transformation.
     magnitude = (1 / mu) * ((1 + mu)**np.abs(signal) - 1)
     return np.sign(signal) * magnitude
 
-def get_wav(fpath, maxlen=hp.T):
+def get_wav(fpath):
     '''Loads waveform from `fpath` and
     quantize it.
 
@@ -47,7 +47,7 @@ def get_wav(fpath, maxlen=hp.T):
       fpath: A string. Sound file path.
 
     Returns:
-      wav: A float32 array of raw waveform. Shape is [T,], where T is original temporal dimensionality.
+      wav: A float32 array of raw waveform. Shape is [None,].
       qt: A float32 array of quantized waveform. Same shape as `wav`.
     '''
     wav, sr = librosa.load(fpath, sr=hp.sr)
@@ -55,10 +55,10 @@ def get_wav(fpath, maxlen=hp.T):
     wav_ = wav / np.abs(wav).max()
     qt = mu_law_encode(wav_)
 
-    # Padding
-    qt = np.pad(qt, ([0, maxlen]), mode="constant")[:maxlen]
+    # # Padding
+    # qt = np.pad(qt, ([0, maxlen]), mode="constant")[:maxlen]
 
     # Dimension expansion
-    qt = np.expand_dims(qt, -1) # (T, 1)
+    qt = np.expand_dims(qt, -1) # (None, 1)
 
     return wav.astype(np.float32), qt.astype(np.int32)

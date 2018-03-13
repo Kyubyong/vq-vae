@@ -92,7 +92,9 @@ def residual_block(inputs, size, rate, speaker_emb, z_q, scope="res_block", reus
 
         # Merge
         cond = tf.expand_dims(cond, -2) # (B, t, 1, H)
+        # print(cond, conv)
         conv = tf.reshape(conv, (B, t, -1, H)) # (B, t, ?, H)
+
         conv += cond # (B, t, ?, H)
         conv = tf.reshape(conv, (B, T, H))  # (B, T, H)
 

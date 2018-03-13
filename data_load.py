@@ -32,13 +32,14 @@ def load_data(mode="train"):
       speaker_ids: A list of speaker ids.
     '''
     if mode=="train":
-        wavs = glob.glob('vctk/wavs/*.npy')
+        wavs = glob.glob('/data/private/speech/vctk/wavs/*.npy')
+        # wavs = glob.glob('vctk/wavs/*.npy')
         qts = [wav.replace("wavs", "qts") for wav in wavs]
         speakers = np.array([speaker2id(os.path.basename(wav)[:4]) for wav in wavs], np.int32)
 
         return wavs, qts, speakers
-    else: # evaluation. two samples.
-        files = [line.split("|")[0] for line in hp.test_data.splitlines()]
+    else: # test. two samples.
+        files = ['/data/private/speech/vctk/qts/'+line.split("|")[0].strip() + ".npy" for line in hp.test_data.splitlines()]
         speaker_ids = [int(line.split("|")[1]) for line in hp.test_data.splitlines()]
         return files, speaker_ids
 
@@ -62,8 +63,11 @@ def get_batch():
         wav, qt, speaker = tf.train.slice_input_producer([wavs, qts, speakers], shuffle=True)
 
         # Parse
-        wav, = tf.py_func(lambda x: np.load(x), [wav], [tf.float32])  # (T,), (T, 1)
-        qt, = tf.py_func(lambda x: np.load(x), [qt], [tf.int32])  # (T,), (T, 1)
+        wav, = tf.py_func(lambda x: np.load(x), [wav], [tf.float32])  # (None, 1)
+        qt, = tf.py_func(lambda x: np.load(x), [qt], [tf.int32])  # (None, 1)
+
+        # Cut off
+        qt = tf.pad(qt, ([0, hp.T], [0, 0]), mode="CONSTANT")[:hp.T, :]
 
         # Add shape information
         wav.set_shape((None,))

@@ -29,18 +29,20 @@ class Graph:
         ## wavs: Raw wav. (B, length) float32
         ## speakers: Speaker ids. (B,). [0, 108]. int32.
         if mode=="train":
-            self.x, self.wavs, self.speakers, self.num_batch = get_batch()
-        else:  # eval
-            self.x = tf.placeholder(tf.int32, shape=(2, hp.T))
-            self.wavs = tf.placeholder(tf.float32, shape=(2, None))
-            self.speakers = tf.placeholder(tf.int32, shape=(2,))
+            self.x, self.wavs, self.speaker_ids, self.num_batch = get_batch()
+            self.y = self.x
+        else:  # test
+            self.x = tf.placeholder(tf.int32, shape=(2, 63488, 1))
+            self.y = tf.placeholder(tf.int32, shape=(2, 63488, 1))
+            self.speaker_ids = tf.placeholder(tf.int32, shape=(2,))
 
         # inputs:
         self.encoder_inputs = tf.to_float(self.x)
-        self.decoder_inputs = tf.concat((tf.zeros_like(self.encoder_inputs[:, :1, :]), self.encoder_inputs[:, :-1, :]), 1)
+        self.decoder_inputs = tf.to_float(self.y)
+        self.decoder_inputs = tf.concat((tf.zeros_like(self.decoder_inputs[:, :1, :]), self.decoder_inputs[:, :-1, :]), 1)
 
         # speaker embedding
-        self.speakers = tf.one_hot(self.speakers, len(hp.speakers)) # (B, len(speakers))
+        self.speakers = tf.one_hot(self.speaker_ids, len(hp.speakers)) # (B, len(speakers))
 
         # encoder
         self.z_e = encoder(self.encoder_inputs) # (B, T', D)
@@ -49,23 +51,22 @@ class Graph:
         self.z_q = vq(self.z_e) # (B, T', D)
 
         # decoder: y -> reconstructed logits.
-        self.y = decoder(self.decoder_inputs, self.speakers, self.z_q) # (B, T, Q)
-        self.y_hat = tf.argmax(self.y, -1) # (B, T)
+        self.y_logits = decoder(self.decoder_inputs, self.speakers, self.z_q) # (B, T, Q)
+        self.y_hat = tf.argmax(self.y_logits, -1) # (B, T)
 
         # monitor
         self.sample0 = tf.py_func(mu_law_decode, [self.y_hat[0]], tf.float32)
         self.sample1 = tf.py_func(mu_law_decode, [self.y_hat[1]], tf.float32)
 
         # speech samples
-        tf.summary.audio('{}/original1'.format(mode), self.wavs[:1], hp.sr, 1)
-        tf.summary.audio('{}/original2'.format(mode), self.wavs[1:], hp.sr, 1)
+        # tf.summary.audio('{}/original1'.format(mode), self.wavs[:1], hp.sr, 1)
+        # tf.summary.audio('{}/original2'.format(mode), self.wavs[1:], hp.sr, 1)
         tf.summary.audio('{}/sample0'.format(mode), tf.expand_dims(self.sample0, 0), hp.sr, 1)
         tf.summary.audio('{}/sample1'.format(mode), tf.expand_dims(self.sample1, 0), hp.sr, 1)
 
+        self.global_step = tf.Variable(0, name='global_step', trainable=False)
         if training:
-            self.global_step = tf.Variable(0, name='global_step', trainable=False)
-
-            self.dec_loss = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(logits=self.y, labels=tf.squeeze(self.x)))
+            self.dec_loss = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(logits=self.y_logits, labels=tf.squeeze(self.y)))
             self.vq_loss = tf.reduce_mean(tf.squared_difference(tf.stop_gradient(self.z_e), self.z_q))
             self.enc_loss = hp.beta * tf.reduce_mean(tf.squared_difference(self.z_e, tf.stop_gradient(self.z_q)))
 
@@ -108,43 +109,12 @@ class Graph:
         # Summary
         self.merged = tf.summary.merge_all()
 
-def eval():
-    # Load data: two samples
-    files, speaker_ids = load_data(mode="eval")
-    speaker_ids = speaker_ids[::-1] # swap
-
-    # Parse
-    wavs, x = [], []
-    for f in files:
-        wav, qt = get_wav(f, hp.T)
-        wavs.append(wav)
-        x.append(qt)
-
-    # Graph
-    g = Graph("eval"); print("Evaluation Graph loaded")
-    with tf.Session() as sess:
-        saver = tf.train.Saver()
-        # Restore saved variables
-        ckpt = tf.train.latest_checkpoint(hp.logdir)
-        if ckpt is not None: saver.restore(sess, ckpt)
-
-        # Writer
-        writer = tf.summary.FileWriter(hp.logdir, sess.graph)
-
-        # Evaluation
-        merged, gs = sess.run([g.merged, g.global_step], {g.wavs: wavs, g.x: x, g.speakers: speaker_ids})
-
-        #  Write summaries
-        writer.add_summary(merged, global_step=gs)
-        writer.close()
-
 if __name__ == '__main__':
     g = Graph(); print("Training Graph loaded")
 
     sv = tf.train.Supervisor(logdir=hp.logdir, save_model_secs=0, global_step=g.global_step)
     with sv.managed_session() as sess:
         while 1:
-            print(g.num_batch)
             for _ in tqdm(range(g.num_batch), total=g.num_batch, ncols=70, leave=False, unit='b'):
                 gs, _ = sess.run([g.global_step, g.train_op])
 
@@ -152,11 +122,4 @@ if __name__ == '__main__':
                 if gs % 100 == 0:
                     sv.saver.save(sess, hp.logdir + '/model_gs_{}'.format(str(gs).zfill(5)))
 
-                    # evaluation
-
-
-
-                # break
-                # if gs > hp.num_iterations: break
-
-print("Done")
+    print("Done")

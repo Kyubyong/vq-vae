@@ -12,10 +12,26 @@ from utils import get_wav
 import os
 import glob
 import numpy as np
+from multiprocessing import Pool
+from tqdm import tqdm
 
-for f in glob.glob(hp.data):
-    w, q = get_wav(f)
-    fname = os.path.basename(f).replace('wav', 'npy')
-    np.save("vctk/wavs/{}".format(fname), w)
-    np.save("vctk/qts/{}".format(fname), q)
+# Creates pool
+p = Pool(4)
+
+def f(fpath):
+    w, q = get_wav(fpath)
+    fname = os.path.basename(fpath).replace('wav', 'npy')
+    if not os.path.exists("/data/private/speech/vctk/wavs"): os.makedirs("/data/private/speech/vctk/wavs")
+    if not os.path.exists("/data/private/speech/vctk/qts"): os.makedirs("/data/private/speech/vctk/qts")
+    np.save("/data/private/speech/vctk/wavs/{}".format(fname), w)
+    np.save("/data/private/speech/vctk/qts/{}".format(fname), q)
+
+fpaths = glob.glob(hp.data)
+total_files = len(fpaths)
+with tqdm(total=total_files) as pbar:
+    for i, _ in tqdm(enumerate(p.imap_unordered(f, fpaths))):
+        pbar.update()
+
+
+
 
